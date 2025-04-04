@@ -1,0 +1,75 @@
+name: Java Backend CI/CD with AI Test Generation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+
+    - name: ☕ Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: ⚙️ Build Java Backend
+      run: |
+        cd java_backend/BackendApp
+        mvn -B clean compile
+
+    - name: 🧪 Run Java Tests
+      run: |
+        cd java_backend/BackendApp
+        mvn -B test
+
+    - name: 📊 Generate JaCoCo Coverage Report
+      run: |
+        cd java_backend/BackendApp
+        mvn -B jacoco:report
+
+    - name: 🐍 Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 📦 Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r python_scripts/requirements.txt
+
+    - name: 🤖 Generate Tests with OpenAI (optional)
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        if [ -n "$OPENAI_API_KEY" ]; then
+          python3 python_scripts/generate_tests.py \
+            --src java_backend/BackendApp/src/main/java \
+            --test java_backend/BackendApp/src/test/java \
+            --skip-existing
+        else
+          echo "⚠️ OPENAI_API_KEY not provided. Skipping test generation."
+        fi
+
+    - name: 🤖 Generate Tests with Hugging Face (optional)
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      env:
+        HF_API_KEY: ${{ secrets.HF_API_KEY }}
+      run: |
+        echo "You can optionally invoke hf_code_generation.py here if needed."
+
+    - name: 📤 Upload Coverage Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: java_backend/BackendApp/target/site/jacoco/
